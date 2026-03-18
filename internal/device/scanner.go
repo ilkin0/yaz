@@ -2,7 +2,6 @@ package device
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"runtime"
 	"strconv"
@@ -63,17 +62,13 @@ func enumrateLinux() ([]Block, error) {
 		bModel := strings.TrimSpace(string(data))
 
 		vblocks = append(vblocks, Block{
-			name:       info.Name(),
-			removeable: isRemovable,
-			blockSize:  (sizeVal * 512), // converting to bytes (sizeVal * 512), sysfs is in 512-byte sectors
-			devNode:    "/dev/" + info.Name(),
-			model:      bModel,
+			Name:       info.Name(),
+			Removeable: isRemovable,
+			BlockSize:  (sizeVal * 512), // converting to bytes (sizeVal * 512), sysfs is in 512-byte sectors
+			DevNode:    "/dev/" + info.Name(),
+			Model:      bModel,
 		})
 	}
 
-	for _, b := range vblocks {
-		fmt.Printf("Name: %s, isRemovable: %v, Size: %d, Model: %s\n", b.name, b.removeable, b.blockSize, b.model)
-	}
-
-	return vblocks, nil
+return vblocks, nil
 }

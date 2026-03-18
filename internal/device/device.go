@@ -1,5 +1,7 @@
 package device
 
+import "fmt"
+
 type (
 	DiskType int
 	// ByteSize uint64
@@ -14,11 +16,23 @@ const (
 const LINUX_DVC_PATH = "/sys/block/"
 
 type Block struct {
-	name         string
-	devNode      string
-	blockSize    uint64
-	blockType    DiskType
-	model        string
-	physicalSize uint64
-	removeable   bool
+	Name         string
+	DevNode      string
+	BlockSize    uint64
+	BlockType    DiskType
+	Model        string
+	PhysicalSize uint64
+	Removeable   bool
+}
+
+func (b Block) FilterValue() string {
+	return b.Name
+}
+
+func (b Block) Title() string {
+	return b.DevNode
+}
+
+func (b Block) Description() string {
+	return fmt.Sprintf("%s - %.1f GB", b.Model, float64(b.BlockSize)/(1024*1024*1024))
 }

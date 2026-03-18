@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/ilkin0/yaz/internal/app"
+	"github.com/ilkin0/yaz/internal/tui"
 )
 
 func main() {
-	app.Run()
+	tui.Start()
 }
