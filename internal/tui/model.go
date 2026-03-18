@@ -10,10 +10,8 @@ type screen int
 
 const (
 	screenHome screen = iota
-	screenImageSelect
 	screenConfirm
 	screenProgress
-	screenComplete
 )
 
 type Model struct {

@@ -20,16 +20,58 @@ var (
 			Padding(0, 1)
 
 	subtitleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#ABABAB")).
-			MarginBottom(1)
+			Foreground(lipgloss.Color("#ABABAB"))
 
 	headerStyle = lipgloss.NewStyle().
-			MarginBottom(1).
-			Padding(1, 2)
+			Padding(1, 2).
+			MarginBottom(0)
+
+	focusedStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7D56F4")).
+			Padding(0, 1).
+			MarginBottom(0)
+
+	unfocusedStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#3C3C3C")).
+			Padding(0, 1).
+			MarginBottom(0)
 )
 
 type Model struct {
+	focused section
 	devices list.Model
+	source  list.Model
+	width   int
+	height  int
+}
+
+type sourceItem struct {
+	title    string
+	desc     string
+	disabled bool
+}
+
+func (s sourceItem) Title() string       { return s.title }
+func (s sourceItem) Description() string { return s.desc }
+func (s sourceItem) FilterValue() string { return s.title }
+
+type section int
+
+const (
+	sectionDevice section = iota
+	sectionImage
+)
+
+func newCompactList(items []list.Item, title string) list.Model {
+	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	l.Title = title
+	l.SetShowHelp(false)
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	l.SetShowPagination(false)
+	return l
 }
 
 func New(devices []device.Block) Model {
@@ -38,12 +80,15 @@ func New(devices []device.Block) Model {
 		items[i] = d
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	l.Title = "Select a device"
-	l.SetShowHelp(true)
-	l.SetFilteringEnabled(false)
+	deviceList := newCompactList(items, "Device")
 
-	return Model{devices: l}
+	sourceList := newCompactList([]list.Item{
+		sourceItem{title: "Browse files...", desc: "Select an image from your filesystem"},
+		sourceItem{title: "Enter path manually", desc: "Type the full path to an image"},
+		sourceItem{title: "Download from URL", desc: "Coming soon", disabled: true},
+	}, "Image")
+
+	return Model{devices: deviceList, source: sourceList}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -54,27 +99,75 @@ func (m Model) header() string {
 	title := titleStyle.Render(fmt.Sprintf(" %s ", appName))
 	version := subtitleStyle.Render(fmt.Sprintf("v%s · USB Flasher", appVersion))
 	return headerStyle.Render(
-		lipgloss.JoinVertical(lipgloss.Left, title, version),
+		lipgloss.JoinHorizontal(lipgloss.Bottom, title, " ", version),
 	)
 }
 
+func (m Model) helpView() string {
+	help := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#626262")).
+		Padding(0, 2).
+		Render("tab section · ↑/↓ navigate · enter select · q quit")
+	return help
+}
+
 func (m Model) View() string {
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
+	deviceView := unfocusedStyle.Render(m.devices.View())
+	sourceView := unfocusedStyle.Render(m.source.View())
+
+	if m.focused == sectionDevice {
+		deviceView = focusedStyle.Render(m.devices.View())
+	} else {
+		sourceView = focusedStyle.Render(m.source.View())
+	}
+
+	lists := lipgloss.JoinHorizontal(lipgloss.Top, deviceView, " ", sourceView)
+
+	content := lipgloss.JoinVertical(
+		lipgloss.Center,
 		m.header(),
-		m.devices.View(),
+		lists,
+		m.helpView(),
 	)
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, content)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.devices.SetWidth(msg.Width)
-		headerHeight := lipgloss.Height(m.header())
-		m.devices.SetHeight(msg.Height - headerHeight)
+		m.width = msg.Width
+		m.height = msg.Height
+
+		headerH := lipgloss.Height(m.header())
+		helpH := lipgloss.Height(m.helpView())
+		borderPadding := 6
+		available := msg.Height - headerH - helpH - borderPadding
+		listH := available / 2
+
+		innerWidth := msg.Width - 4
+		m.devices.SetWidth(innerWidth)
+		m.source.SetWidth(innerWidth)
+		m.devices.SetHeight(listH)
+		m.source.SetHeight(listH)
+
+	case tea.KeyMsg:
+		if msg.String() == "tab" {
+			if m.focused == sectionDevice {
+				m.focused = sectionImage
+			} else {
+				m.focused = sectionDevice
+			}
+			return m, nil
+		}
 	}
 
 	var cmd tea.Cmd
-	m.devices, cmd = m.devices.Update(msg)
+	switch m.focused {
+	case sectionDevice:
+		m.devices, cmd = m.devices.Update(msg)
+	case sectionImage:
+		m.source, cmd = m.source.Update(msg)
+	}
 	return m, cmd
 }
