@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ilkin0/yaz/internal/config"
 	"github.com/ilkin0/yaz/internal/device"
 )
 
@@ -24,7 +25,7 @@ type Model struct {
 	devices     list.Model
 	source      list.Model
 	optionsForm *huh.Form
-	opts        *Options
+	opts        *config.Options
 	imageMode   imageMode
 	filePicker  filepicker.Model
 	imagePath   string
@@ -44,7 +45,7 @@ func newCompactList(items []list.Item, title string) list.Model {
 }
 
 func New(devices []device.Block) Model {
-	opts := &Options{
+	opts := &config.Options{
 		VerifyWrite: true,
 		FileSystem:  "fat32",
 		ClusterSize: "auto",
@@ -80,7 +81,7 @@ func (m Model) header() string {
 type ProceedMsg struct {
 	Device    device.Block
 	ImagePath string
-	Opts      Options
+	Opts      config.Options
 }
 
 func (m Model) SelectedDevice() (device.Block, bool) {
@@ -96,7 +97,7 @@ func (m Model) ImagePath() string {
 	return m.imagePath
 }
 
-func (m Model) SelectedOptions() Options {
+func (m Model) SelectedOptions() config.Options {
 	return *m.opts
 }
 

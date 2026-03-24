@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ilkin0/yaz/internal/config"
 	"github.com/ilkin0/yaz/internal/device"
-	"github.com/ilkin0/yaz/internal/tui/screens/home"
 )
 
 var (
@@ -56,7 +56,7 @@ var (
 type ConfirmMsg struct {
 	Device    device.Block
 	ImagePath string
-	Opts      home.Options
+	Opts      config.Options
 }
 
 type CancelMsg struct{}
@@ -64,13 +64,13 @@ type CancelMsg struct{}
 type Model struct {
 	device     device.Block
 	imagePath  string
-	opts       home.Options
+	opts       config.Options
 	confirmBtn bool
 	width      int
 	height     int
 }
 
-func New(dev device.Block, imagePath string, opts home.Options) Model {
+func New(dev device.Block, imagePath string, opts config.Options) Model {
 	return Model{
 		device:     dev,
 		imagePath:  imagePath,
@@ -131,15 +131,10 @@ func (m Model) View() string {
 	)
 
 	optsInfo := lipgloss.JoinVertical(lipgloss.Left,
-		labelStyle.Render("File System:")+"  "+valueStyle.Render(m.opts.FileSystem),
+		labelStyle.Render("Quick Format:")+"  "+valueStyle.Render(boolToStr(m.opts.QuickFormat)),
 		labelStyle.Render("Verify:")+"  "+valueStyle.Render(boolToStr(m.opts.VerifyWrite)),
 		labelStyle.Render("Sync Mode:")+"  "+valueStyle.Render(boolToStr(m.opts.SyncMode)),
-		labelStyle.Render("Quick Format:")+"  "+valueStyle.Render(boolToStr(m.opts.QuickFormat)),
 	)
-
-	if m.opts.VolumeLabel != "" {
-		optsInfo += "\n" + labelStyle.Render("Label:") + "  " + valueStyle.Render(m.opts.VolumeLabel)
-	}
 
 	details := sectionStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,

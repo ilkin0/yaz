@@ -3,42 +3,42 @@ package home
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/ilkin0/yaz/internal/config"
 )
 
-type Options struct {
-	VerifyWrite bool
-	SyncMode    bool
-	QuickFormat bool
-	FileSystem  string
-	VolumeLabel string
-	ClusterSize string
-}
-
-func defaultOptions() Options {
-	return Options{
+func defaultOptions() config.Options {
+	return config.Options{
 		VerifyWrite: true,
+		QuickFormat: true,
 		FileSystem:  "fat32",
 		ClusterSize: "auto",
 	}
 }
 
-func initOptionsForm(opts *Options) *huh.Form {
+func initOptionsForm(opts *config.Options) *huh.Form {
 	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
+				Title("Quick Format").
+				Description("Skip zero-fill before writing").
+				Value(&opts.QuickFormat),
+
+			huh.NewConfirm().
 				Title("Verify Write").
+				Description("Compare checksums after write").
 				Value(&opts.VerifyWrite),
 
 			huh.NewConfirm().
 				Title("Sync Mode").
+				Description("Use O_SYNC for safer writes").
 				Value(&opts.SyncMode),
+		),
 
-			huh.NewConfirm().
-				Title("Quick Format").
-				Value(&opts.QuickFormat),
-
+		// Phase 2: format-only mode options (disabled)
+		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("File System").
+				Description("Coming in Phase 2").
 				Options(
 					huh.NewOption("FAT32", "fat32"),
 					huh.NewOption("exFAT", "exfat"),
@@ -48,6 +48,7 @@ func initOptionsForm(opts *Options) *huh.Form {
 
 			huh.NewSelect[string]().
 				Title("Cluster Size").
+				Description("Coming in Phase 2").
 				Options(
 					huh.NewOption("Auto", "auto"),
 					huh.NewOption("4K", "4k"),
@@ -60,13 +61,14 @@ func initOptionsForm(opts *Options) *huh.Form {
 
 			huh.NewInput().
 				Title("Volume Label").
+				Description("Coming in Phase 2").
 				Value(&opts.VolumeLabel),
-		),
+		).WithHide(true),
 	)
 }
 
 func (m Model) optionsView() string {
-	title := optionsTitleStyle.Render("Format Options")
+	title := optionsTitleStyle.Render("Write Options")
 	content := title + "\n" + m.optionsForm.View()
 
 	if m.focused == sectionOptions {

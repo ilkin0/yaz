@@ -5,6 +5,7 @@ import (
 	"github.com/ilkin0/yaz/internal/device"
 	"github.com/ilkin0/yaz/internal/tui/screens/confirm"
 	"github.com/ilkin0/yaz/internal/tui/screens/home"
+	progressScreen "github.com/ilkin0/yaz/internal/tui/screens/progress"
 )
 
 type screen int
@@ -16,9 +17,12 @@ const (
 )
 
 type Model struct {
-	screen  screen
-	home    home.Model
-	confirm confirm.Model
+	program *tea.Program
+
+	screen   screen
+	home     home.Model
+	confirm  confirm.Model
+	progress progressScreen.Model
 
 	device *device.Block
 	image  string
@@ -53,8 +57,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.home.ResetForm()
 
 	case confirm.ConfirmMsg:
-		// TODO: navigate to progress screen and start flashing
-		return m, nil
+		m.progress = progressScreen.New(m.program, msg.Device, msg.ImagePath, msg.Opts)
+		m.screen = screenProgress
+		return m, m.progress.Init()
 	}
 
 	var cmd tea.Cmd
@@ -67,6 +72,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screenConfirm:
 		updated, cmd = m.confirm.Update(msg)
 		m.confirm = updated.(confirm.Model)
+	case screenProgress:
+		updated, cmd = m.progress.Update(msg)
+		m.progress = updated.(progressScreen.Model)
 	}
 	return m, cmd
 }
@@ -77,6 +85,8 @@ func (m Model) View() string {
 		return m.home.View()
 	case screenConfirm:
 		return m.confirm.View()
+	case screenProgress:
+		return m.progress.View()
 	}
 	return ""
 }

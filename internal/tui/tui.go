@@ -16,7 +16,8 @@ func Start() {
 	}
 
 	m := New(devices)
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	m.program = p
 	if _, err := p.Run(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
