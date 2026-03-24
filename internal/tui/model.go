@@ -3,6 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ilkin0/yaz/internal/device"
+	"github.com/ilkin0/yaz/internal/tui/screens/confirm"
 	"github.com/ilkin0/yaz/internal/tui/screens/home"
 )
 
@@ -15,8 +16,9 @@ const (
 )
 
 type Model struct {
-	screen screen
-	home   home.Model
+	screen  screen
+	home    home.Model
+	confirm confirm.Model
 
 	device *device.Block
 	image  string
@@ -40,6 +42,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		}
+
+	case home.ProceedMsg:
+		m.confirm = confirm.New(msg.Device, msg.ImagePath, msg.Opts)
+		m.screen = screenConfirm
+		return m, nil
+
+	case confirm.CancelMsg:
+		m.screen = screenHome
+		return m, m.home.ResetForm()
+
+	case confirm.ConfirmMsg:
+		// TODO: navigate to progress screen and start flashing
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -49,6 +64,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screenHome:
 		updated, cmd = m.home.Update(msg)
 		m.home = updated.(home.Model)
+	case screenConfirm:
+		updated, cmd = m.confirm.Update(msg)
+		m.confirm = updated.(confirm.Model)
 	}
 	return m, cmd
 }
@@ -57,6 +75,8 @@ func (m Model) View() string {
 	switch m.screen {
 	case screenHome:
 		return m.home.View()
+	case screenConfirm:
+		return m.confirm.View()
 	}
 	return ""
 }

@@ -3,6 +3,7 @@ package home
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -23,7 +24,10 @@ type Model struct {
 	devices     list.Model
 	source      list.Model
 	optionsForm *huh.Form
-	opts        Options
+	opts        *Options
+	imageMode   imageMode
+	filePicker  filepicker.Model
+	imagePath   string
 	width       int
 	height      int
 	formWidth   int
@@ -40,13 +44,24 @@ func newCompactList(items []list.Item, title string) list.Model {
 }
 
 func New(devices []device.Block) Model {
-	opts := defaultOptions()
+	opts := &Options{
+		VerifyWrite: true,
+		FileSystem:  "fat32",
+		ClusterSize: "auto",
+	}
 	return Model{
 		devices:     initDeviceList(devices),
 		source:      initSourceList(),
-		optionsForm: initOptionsForm(&opts),
 		opts:        opts,
+		optionsForm: initOptionsForm(opts),
+		filePicker:  initFilePicker(),
 	}
+}
+
+func (m *Model) ResetForm() tea.Cmd {
+	m.optionsForm = initOptionsForm(m.opts)
+	m.optionsForm.WithWidth(m.formWidth)
+	return m.optionsForm.Init()
 }
 
 func (m Model) Init() tea.Cmd {
@@ -61,8 +76,36 @@ func (m Model) header() string {
 	)
 }
 
+// ProceedMsg is sent when the user has made all selections and wants to continue.
+type ProceedMsg struct {
+	Device    device.Block
+	ImagePath string
+	Opts      Options
+}
+
+func (m Model) SelectedDevice() (device.Block, bool) {
+	item := m.devices.SelectedItem()
+	if item == nil {
+		return device.Block{}, false
+	}
+	b, ok := item.(device.Block)
+	return b, ok
+}
+
+func (m Model) ImagePath() string {
+	return m.imagePath
+}
+
+func (m Model) SelectedOptions() Options {
+	return *m.opts
+}
+
 func (m Model) helpView() string {
-	return helpStyle.Render("tab section · ↑/↓ navigate · enter select · q quit")
+	help := "tab section · ↑/↓ navigate · enter select · q quit"
+	if m.imagePath != "" {
+		help = "tab section · ↑/↓ navigate · enter select · ctrl+n continue · q quit"
+	}
+	return helpStyle.Render(help)
 }
 
 func (m Model) View() string {
@@ -109,6 +152,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "tab":
 			m.focused = (m.focused + 1) % 3
+			return m, nil
+		case "ctrl+n":
+			if m.imagePath != "" {
+				dev, ok := m.SelectedDevice()
+				if ok {
+					return m, func() tea.Msg {
+						return ProceedMsg{
+							Device:    dev,
+							ImagePath: m.imagePath,
+							Opts:      *m.opts,
+						}
+					}
+				}
+			}
 			return m, nil
 		case "q":
 			if m.focused != sectionOptions {

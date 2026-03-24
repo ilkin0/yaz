@@ -66,10 +66,13 @@ func initOptionsForm(opts *Options) *huh.Form {
 }
 
 func (m Model) optionsView() string {
+	title := optionsTitleStyle.Render("Format Options")
+	content := title + "\n" + m.optionsForm.View()
+
 	if m.focused == sectionOptions {
-		return focusedStyle.Render(m.optionsForm.View())
+		return focusedStyle.Render(content)
 	}
-	return unfocusedStyle.Render(m.optionsForm.View())
+	return unfocusedStyle.Render(content)
 }
 
 func (m *Model) updateOptions(msg tea.Msg) tea.Cmd {
@@ -78,11 +81,17 @@ func (m *Model) updateOptions(msg tea.Msg) tea.Cmd {
 		m.optionsForm = f
 	}
 
-	// TODO: on form completion, navigate to confirm screen instead of reinitializing
 	if m.optionsForm.State == huh.StateCompleted {
-		m.optionsForm = initOptionsForm(&m.opts)
-		m.optionsForm.WithWidth(m.formWidth)
-		return m.optionsForm.Init()
+		dev, ok := m.SelectedDevice()
+		if ok && m.imagePath != "" {
+			return func() tea.Msg {
+				return ProceedMsg{
+					Device:    dev,
+					ImagePath: m.imagePath,
+					Opts:      *m.opts,
+				}
+			}
+		}
 	}
 
 	return cmd
