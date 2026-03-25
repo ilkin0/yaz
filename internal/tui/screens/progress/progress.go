@@ -47,12 +47,10 @@ var (
 // ProgressMsg is sent by the writer goroutine to update the progress bar.
 type ProgressMsg writer.Progress
 
-// WriteDoneMsg is sent when the write completes successfully.
 type WriteDoneMsg struct {
 	Duration time.Duration
 }
 
-// WriteErrorMsg is sent when the write fails.
 type WriteErrorMsg struct {
 	Err error
 }
@@ -66,19 +64,20 @@ const (
 )
 
 type Model struct {
-	program  *tea.Program
-	device   device.Block
-	image    string
-	opts     config.Options
-	bar      progress.Model
-	state    state
-	progress writer.Progress
-	err      error
-	logs     []string
-	start    time.Time
-	duration time.Duration
-	width    int
-	height   int
+	program   *tea.Program
+	device    device.Block
+	image     string
+	opts      config.Options
+	bar       progress.Model
+	state     state
+	progress  writer.Progress
+	lastPhase writer.Phase
+	err       error
+	logs      []string
+	start     time.Time
+	duration  time.Duration
+	width     int
+	height    int
 }
 
 func New(p *tea.Program, dev device.Block, image string, opts config.Options) Model {
@@ -102,7 +101,6 @@ func New(p *tea.Program, dev device.Block, image string, opts config.Options) Mo
 }
 
 func (m Model) Init() tea.Cmd {
-
 	return func() tea.Msg {
 		go func() {
 			start := time.Now()
@@ -128,6 +126,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ProgressMsg:
 		m.progress = writer.Progress(msg)
+
+		if m.progress.Phase != m.lastPhase {
+			if m.progress.Phase == writer.PhaseVerifying {
+				m.logs = append(m.logs, fmt.Sprintf("[%s] Verifying write...", time.Now().Format("15:04:05")))
+			}
+			m.lastPhase = m.progress.Phase
+		}
+
 		percent := float64(m.progress.BytesWritten) / float64(m.progress.TotalBytes)
 		return m, m.bar.SetPercent(percent)
 
@@ -159,7 +165,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	title := titleStyle.Render(" Writing Image ")
+	phaseLabel := "Writing Image"
+	if m.progress.Phase == writer.PhaseVerifying {
+		phaseLabel = "Verifying Write"
+	}
+	title := titleStyle.Render(" " + phaseLabel + " ")
 
 	info := labelStyle.Render(fmt.Sprintf(
 		"%s  →  %s",
@@ -221,7 +231,6 @@ func (m Model) View() string {
 		)
 	}
 
-	// log section
 	logContent := ""
 	for _, l := range m.logs {
 		logContent += logStyle.Render(l) + "\n"

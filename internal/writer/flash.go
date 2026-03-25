@@ -2,6 +2,7 @@ package writer
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	DD_BUFFER_SIZE int = 4
+	writeBufferSize int = 4 * 1024 * 1024
 )
 
 func Flash(device, image string, opts config.Options, onProgress ProgressFunc) error {
@@ -41,12 +42,12 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 		// TODO zero-fill device first
 	}
 
-	buff := make([]byte, DD_BUFFER_SIZE*1024*1024)
+	buff := make([]byte, writeBufferSize)
 	var written uint64
 	lastTime := time.Now()
 	var lastWritten uint64
 	var smoothSpeed float64
-	const smoothing = 0.3 // weight for new speed sample (lower = smoother)
+	const smoothing = 0.3
 
 	for {
 		n, err := f.Read(buff)
@@ -59,7 +60,7 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 
 			now := time.Now()
 			elapsed := now.Sub(lastTime).Seconds()
-			if elapsed > 0.5 { // update speed every 500ms minimum
+			if elapsed > 0.5 {
 				chunkSpeed := float64(written-lastWritten) / elapsed
 				if smoothSpeed == 0 {
 					smoothSpeed = chunkSpeed
@@ -72,6 +73,7 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 
 			if onProgress != nil {
 				onProgress(Progress{
+					Phase:        PhaseWriting,
 					BytesWritten: written,
 					TotalBytes:   uint64(fsize),
 					Speed:        smoothSpeed,
@@ -97,5 +99,15 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	// tell kernel to re-read the partition table
 	exec.Command("partprobe", device).Run()
 
+	if opts.VerifyWrite {
+		verified, err := Verify(device, image, onProgress)
+		if err != nil {
+			return fmt.Errorf("verification failed: %w", err)
+		}
+
+		if !verified {
+			return errors.New("file integrity failed")
+		}
+	}
 	return nil
 }
