@@ -13,7 +13,9 @@ const (
 	Disk
 )
 
-const linuxSysBlockPath = "/sys/block/"
+const (
+	linuxSysBlockPath = "/sys/block/"
+)
 
 type Block struct {
 	Name         string

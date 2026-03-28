@@ -5,16 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/ilkin0/yaz/internal/config"
 )
 
 const (
-	writeBufferSize int = 4 * 1024 * 1024
+	writeBufferSize = 4 * 1024 * 1024
 )
 
 func Flash(device, image string, opts config.Options, onProgress ProgressFunc) error {
@@ -30,26 +27,11 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	}
 	fsize := fi.Size()
 
-	// Unmount device and its partitions before open/writing
-	devDir := "/dev"
-	devicePrefix, _ := strings.CutPrefix(device, devDir+"/")
-	var partitions []string
-	entries, _ := os.ReadDir(devDir)
-
-	regex := regexp.MustCompile(`^` + regexp.QuoteMeta(devicePrefix) + `\d+$`)
-	for _, entry := range entries {
-		name := entry.Name()
-		if regex.MatchString(name) {
-			partitions = append(partitions, devDir+"/"+name)
-		}
+	// Unmount device and its partitions before writing
+	if onProgress != nil {
+		onProgress(Progress{LogMessage: "Unmounting device..."})
 	}
-
-	if onProgress != nil && len(partitions) > 0 {
-		onProgress(Progress{LogMessage: fmt.Sprintf("Unmounting %d partition(s)...", len(partitions))})
-	}
-	for _, p := range partitions {
-		exec.Command("umount", "-l", p).Run()
-	}
+	unmountDevice(device)
 
 	if onProgress != nil {
 		onProgress(Progress{LogMessage: "Opening device for writing..."})
@@ -60,9 +42,8 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	}
 	d, err := os.OpenFile(device, dFlags, 0)
 	if err != nil {
-		return errors.New("cannot open device: " + device)
+		return fmt.Errorf("cannot open device %s: %w", device, err)
 	}
-	defer d.Close()
 
 	if !opts.QuickFormat {
 		// TODO zero-fill device first
@@ -80,7 +61,8 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 		if n > 0 {
 			_, writeErr := d.Write(buff[:n])
 			if writeErr != nil {
-				return errors.New("error happened during image writing")
+				d.Close()
+				return fmt.Errorf("error writing to device: %w", writeErr)
 			}
 			written += uint64(n)
 
@@ -110,6 +92,7 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 			break
 		}
 		if err != nil {
+			d.Close()
 			return err
 		}
 	}
@@ -118,15 +101,12 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	if onProgress != nil {
 		onProgress(Progress{LogMessage: "Syncing device..."})
 	}
-	if err := d.Sync(); err != nil {
-		return errors.New("error syncing device: " + err.Error())
+	if err := syncAndClose(d, device); err != nil {
+		return err
 	}
 
-	// close device before re-reading partition table
-	d.Close()
-
-	// tell kernel to re-read the partition table
-	exec.Command("partprobe", device).Run()
+	// re-read the partition table
+	rereadPartition(device)
 
 	if opts.VerifyWrite {
 		if onProgress != nil {
