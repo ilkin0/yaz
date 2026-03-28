@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ilkin0/yaz/internal/config"
@@ -27,6 +29,24 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 		return errors.New("cannot open file info for " + image)
 	}
 	fsize := fi.Size()
+
+	// Unmount device and its partitions before open/writing
+	devDir := "/dev"
+	devicePrefix, _ := strings.CutPrefix(device, devDir+"/")
+	var partitions []string
+	entries, _ := os.ReadDir(devDir)
+
+	regex := regexp.MustCompile(`^` + regexp.QuoteMeta(devicePrefix) + `\d+$`)
+	for _, entry := range entries {
+		name := entry.Name()
+		if regex.MatchString(name) {
+			partitions = append(partitions, devDir+"/"+name)
+		}
+	}
+
+	for _, p := range partitions {
+		exec.Command("umount", "-l", p).Run()
+	}
 
 	dFlags := os.O_WRONLY
 	if opts.SyncMode {

@@ -180,11 +180,6 @@ func (m Model) View() string {
 	var status string
 	switch m.state {
 	case stateWriting:
-		percent := 0.0
-		if m.progress.TotalBytes > 0 {
-			percent = float64(m.progress.BytesWritten) / float64(m.progress.TotalBytes) * 100
-		}
-
 		elapsed := time.Since(m.start)
 		speed := m.progress.Speed
 
@@ -199,11 +194,10 @@ func (m Model) View() string {
 			m.bar.View(),
 			"",
 			labelStyle.Render(fmt.Sprintf(
-				"%s / %s    %s/s    %.0f%%    %s    Elapsed: %s",
+				"%s / %s    %s/s    %s    Elapsed: %s",
 				humanBytes(m.progress.BytesWritten),
 				humanBytes(m.progress.TotalBytes),
 				humanBytes(uint64(speed)),
-				percent,
 				eta,
 				elapsed.Truncate(time.Second),
 			)),
