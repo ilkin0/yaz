@@ -13,7 +13,7 @@ const (
 	Disk
 )
 
-const LINUX_DVC_PATH = "/sys/block/"
+const linuxSysBlockPath = "/sys/block/"
 
 type Block struct {
 	Name         string

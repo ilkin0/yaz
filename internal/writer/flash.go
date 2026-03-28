@@ -44,10 +44,16 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 		}
 	}
 
+	if onProgress != nil && len(partitions) > 0 {
+		onProgress(Progress{LogMessage: fmt.Sprintf("Unmounting %d partition(s)...", len(partitions))})
+	}
 	for _, p := range partitions {
 		exec.Command("umount", "-l", p).Run()
 	}
 
+	if onProgress != nil {
+		onProgress(Progress{LogMessage: "Opening device for writing..."})
+	}
 	dFlags := os.O_WRONLY
 	if opts.SyncMode {
 		dFlags |= os.O_SYNC
@@ -109,6 +115,9 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	}
 
 	// flush all cached writes to the device
+	if onProgress != nil {
+		onProgress(Progress{LogMessage: "Syncing device..."})
+	}
 	if err := d.Sync(); err != nil {
 		return errors.New("error syncing device: " + err.Error())
 	}
@@ -120,6 +129,9 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	exec.Command("partprobe", device).Run()
 
 	if opts.VerifyWrite {
+		if onProgress != nil {
+			onProgress(Progress{LogMessage: "Starting verification..."})
+		}
 		verified, err := Verify(device, image, onProgress)
 		if err != nil {
 			return fmt.Errorf("verification failed: %w", err)
@@ -127,6 +139,9 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 
 		if !verified {
 			return errors.New("file integrity failed")
+		}
+		if onProgress != nil {
+			onProgress(Progress{LogMessage: "Verification passed"})
 		}
 	}
 	return nil

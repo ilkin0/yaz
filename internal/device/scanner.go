@@ -18,7 +18,7 @@ func EnumurateDevice() ([]Block, error) {
 }
 
 func enumrateLinux() ([]Block, error) {
-	c, err := os.ReadDir(LINUX_DVC_PATH)
+	c, err := os.ReadDir(linuxSysBlockPath)
 	if err != nil {
 		return nil, errors.New("error happened during DIR listing")
 	}
@@ -35,7 +35,7 @@ func enumrateLinux() ([]Block, error) {
 			continue
 		}
 
-		blockPath := LINUX_DVC_PATH + info.Name()
+		blockPath := linuxSysBlockPath + info.Name()
 
 		data, err := os.ReadFile(blockPath + "/removable")
 		if err != nil {
@@ -70,5 +70,5 @@ func enumrateLinux() ([]Block, error) {
 		})
 	}
 
-return vblocks, nil
+	return vblocks, nil
 }

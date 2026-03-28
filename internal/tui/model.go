@@ -52,7 +52,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenConfirm
 		return m, nil
 
-	case confirm.CancelMsg:
+	case confirm.CancelMsg, progressScreen.HomeMsg:
 		m.screen = screenHome
 		return m, m.home.ResetForm()
 

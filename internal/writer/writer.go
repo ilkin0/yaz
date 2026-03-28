@@ -12,6 +12,7 @@ type Progress struct {
 	BytesWritten uint64
 	TotalBytes   uint64
 	Speed        float64
+	LogMessage   string
 }
 
 type ProgressFunc func(Progress)

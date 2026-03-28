@@ -3,6 +3,7 @@ package progress
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -54,6 +55,8 @@ type WriteDoneMsg struct {
 type WriteErrorMsg struct {
 	Err error
 }
+
+type HomeMsg struct{}
 
 type state int
 
@@ -125,17 +128,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bar.Width = msg.Width / 2
 
 	case ProgressMsg:
-		m.progress = writer.Progress(msg)
+		p := writer.Progress(msg)
 
-		if m.progress.Phase != m.lastPhase {
-			if m.progress.Phase == writer.PhaseVerifying {
-				m.logs = append(m.logs, fmt.Sprintf("[%s] Verifying write...", time.Now().Format("15:04:05")))
-			}
-			m.lastPhase = m.progress.Phase
+		if p.LogMessage != "" {
+			m.logs = append(m.logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), p.LogMessage))
 		}
 
-		percent := float64(m.progress.BytesWritten) / float64(m.progress.TotalBytes)
-		return m, m.bar.SetPercent(percent)
+		if p.TotalBytes > 0 {
+			m.progress = p
+			if m.progress.Phase != m.lastPhase {
+				m.lastPhase = m.progress.Phase
+			}
+			percent := float64(m.progress.BytesWritten) / float64(m.progress.TotalBytes)
+			return m, m.bar.SetPercent(percent)
+		}
+
+		return m, nil
 
 	case WriteDoneMsg:
 		m.state = stateDone
@@ -157,6 +165,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q":
 			if m.state == stateDone || m.state == stateError {
 				return m, tea.Quit
+			}
+		case "r":
+			if m.state == stateDone || m.state == stateError {
+				return m, func() tea.Msg { return HomeMsg{} }
 			}
 		}
 	}
@@ -225,15 +237,17 @@ func (m Model) View() string {
 		)
 	}
 
-	logContent := ""
+	var sb strings.Builder
 	for _, l := range m.logs {
-		logContent += logStyle.Render(l) + "\n"
+		sb.WriteString(logStyle.Render(l))
+		sb.WriteString("\n")
 	}
+	logContent := sb.String()
 	logSection := logStyle.Render("── Log ──") + "\n" + logContent
 
 	help := helpStyle.Render("ctrl+c cancel")
 	if m.state == stateDone || m.state == stateError {
-		help = helpStyle.Render("q quit")
+		help = helpStyle.Render("q quit · r flash another")
 	}
 
 	content := boxStyle.Render(

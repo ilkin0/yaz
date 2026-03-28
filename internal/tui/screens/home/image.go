@@ -44,6 +44,8 @@ func initFilePicker() filepicker.Model {
 	fp.AutoHeight = false
 	fp.SetHeight(30)
 
+	fp.KeyMap.Back.SetKeys("h", "backspace", "left")
+
 	home, err := os.UserHomeDir()
 	if err == nil {
 		fp.CurrentDirectory = home
@@ -58,7 +60,8 @@ func (m Model) imageView() string {
 	var content string
 	switch m.imageMode {
 	case modeBrowse:
-		content = m.filePicker.View()
+		help := helpStyle.Render("↑/↓ navigate · →/enter open · ← back · esc exit")
+		content = m.filePicker.View() + "\n" + help
 	default:
 		content = m.source.View()
 	}
