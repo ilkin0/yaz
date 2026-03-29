@@ -98,7 +98,7 @@ func New(p *tea.Program, dev device.Block, image string, opts config.Options) Mo
 		state:   stateWriting,
 		start:   time.Now(),
 		logs: []string{
-			fmt.Sprintf("[%s] Starting write...", time.Now().Format("15:04:05")),
+			fmt.Sprintf("[%s] Starting write...", time.Now().Format("15:04:05.000")),
 		},
 	}
 }
@@ -131,7 +131,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p := writer.Progress(msg)
 
 		if p.LogMessage != "" {
-			m.logs = append(m.logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), p.LogMessage))
+			m.logs = append(m.logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000"), p.LogMessage))
 		}
 
 		if p.TotalBytes > 0 {
@@ -148,12 +148,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case WriteDoneMsg:
 		m.state = stateDone
 		m.duration = msg.Duration
-		m.logs = append(m.logs, fmt.Sprintf("[%s] Write complete!", time.Now().Format("15:04:05")))
+		m.logs = append(m.logs, fmt.Sprintf("[%s] Write complete!", time.Now().Format("15:04:05.000")))
 
 	case WriteErrorMsg:
 		m.state = stateError
 		m.err = msg.Err
-		m.logs = append(m.logs, fmt.Sprintf("[%s] ERROR: %v", time.Now().Format("15:04:05"), msg.Err))
+		m.logs = append(m.logs, fmt.Sprintf("[%s] ERROR: %v", time.Now().Format("15:04:05.000"), msg.Err))
 
 	case progress.FrameMsg:
 		barModel, cmd := m.bar.Update(msg)

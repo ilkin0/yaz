@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ilkin0/yaz/internal/bootable"
 	"github.com/ilkin0/yaz/internal/config"
 )
 
@@ -20,6 +21,21 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 		return errors.New("cannot open file: " + image)
 	}
 	defer f.Close()
+
+	iMeta, err := bootable.GetImageMetadata(f)
+	if err != nil {
+		return fmt.Errorf("reading image metadata: %w", err)
+	}
+	onProgress(Progress{LogMessage: fmt.Sprintf("ISO is hybrid: %t", iMeta.IsHybrid())})
+	if !iMeta.IsHybrid() {
+		onProgress(Progress{LogMessage: fmt.Sprintf("Partitioning device: [%s] label: [%s]", device, iMeta.Label)})
+		if err := bootable.MakeBootable(device, iMeta.Label); err != nil {
+			return err
+		}
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("cannot seek image file: %w", err)
+	}
 
 	fi, err := f.Stat()
 	if err != nil {
@@ -59,6 +75,7 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	for {
 		n, err := f.Read(buff)
 		if n > 0 {
+			// TODO macOS 'rdisk' writes is faster than 'disk' writes
 			_, writeErr := d.Write(buff[:n])
 			if writeErr != nil {
 				d.Close()
