@@ -27,12 +27,20 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 		return fmt.Errorf("reading image metadata: %w", err)
 	}
 	onProgress(Progress{LogMessage: fmt.Sprintf("ISO is hybrid: %t", iMeta.IsHybrid())})
+
 	if !iMeta.IsHybrid() {
 		onProgress(Progress{LogMessage: fmt.Sprintf("Partitioning device: [%s] label: [%s]", device, iMeta.Label)})
-		if err := bootable.MakeBootable(device, iMeta.Label); err != nil {
-			return err
-		}
+		return bootable.MakeUEFIBootDevice(device, iMeta.Label, image, func(msg string, bytesCopied, totalBytes uint64) {
+			p := Progress{LogMessage: msg}
+			if totalBytes > 0 {
+				p.Phase = PhaseWriting
+				p.BytesWritten = bytesCopied
+				p.TotalBytes = totalBytes
+			}
+			onProgress(p)
+		})
 	}
+
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("cannot seek image file: %w", err)
 	}
