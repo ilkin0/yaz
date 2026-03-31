@@ -5,12 +5,13 @@ import (
 	"errors"
 	"io"
 	"os"
-	"time"
+
+	"github.com/ilkin0/yaz/internal/progress"
 )
 
 const verifyBufferSize = 4 * 1024 * 1024
 
-func Verify(device, filePath string, onProgress ProgressFunc) (bool, error) {
+func Verify(device, filePath string, onProgress progress.Func) (bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return false, errors.New("failed to open file: " + filePath)
@@ -32,13 +33,10 @@ func Verify(device, filePath string, onProgress ProgressFunc) (bool, error) {
 	fileBuf := make([]byte, verifyBufferSize)
 	deviceBuf := make([]byte, verifyBufferSize)
 	var verified uint64
-	var smoothSpeed float64
-	lastTime := time.Now()
-	var lastVerified uint64
 
 	for {
 		fn, ferr := io.ReadFull(file, fileBuf)
-		dn, derr := io.ReadFull(d, deviceBuf[:fn]) // read same amount from device
+		dn, derr := io.ReadFull(d, deviceBuf[:fn])
 
 		if fn > 0 {
 			if dn != fn {
@@ -51,27 +49,11 @@ func Verify(device, filePath string, onProgress ProgressFunc) (bool, error) {
 
 			verified += uint64(fn)
 
-			if onProgress != nil {
-				now := time.Now()
-				elapsed := now.Sub(lastTime).Seconds()
-				if elapsed > 0.5 {
-					chunkSpeed := float64(verified-lastVerified) / elapsed
-					if smoothSpeed == 0 {
-						smoothSpeed = chunkSpeed
-					} else {
-						smoothSpeed = 0.3*chunkSpeed + 0.7*smoothSpeed
-					}
-					lastTime = now
-					lastVerified = verified
-				}
-
-				onProgress(Progress{
-					Phase:        PhaseVerifying,
-					BytesWritten: verified,
-					TotalBytes:   totalBytes,
-					Speed:        smoothSpeed,
-				})
-			}
+			onProgress(progress.Update{
+				Phase:        progress.PhaseVerifying,
+				BytesWritten: verified,
+				TotalBytes:   totalBytes,
+			})
 		}
 
 		if ferr != nil {

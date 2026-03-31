@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ilkin0/yaz/internal/config"
 	"github.com/ilkin0/yaz/internal/device"
+	pg "github.com/ilkin0/yaz/internal/progress"
 	"github.com/ilkin0/yaz/internal/writer"
 )
 
@@ -46,7 +47,7 @@ var (
 )
 
 // ProgressMsg is sent by the writer goroutine to update the progress bar.
-type ProgressMsg writer.Progress
+type ProgressMsg pg.Update
 
 type WriteDoneMsg struct {
 	Duration time.Duration
@@ -73,8 +74,11 @@ type Model struct {
 	opts      config.Options
 	bar       progress.Model
 	state     state
-	progress  writer.Progress
-	lastPhase writer.Phase
+	progress  pg.Update
+	lastPhase pg.Phase
+	speed     float64
+	lastBytes uint64
+	lastTime  time.Time
 	err       error
 	logs      []string
 	start     time.Time
@@ -89,16 +93,18 @@ func New(p *tea.Program, dev device.Block, image string, opts config.Options) Mo
 		progress.WithWidth(50),
 	)
 
+	now := time.Now()
 	return Model{
-		program: p,
-		device:  dev,
-		image:   image,
-		opts:    opts,
-		bar:     bar,
-		state:   stateWriting,
-		start:   time.Now(),
+		program:  p,
+		device:   dev,
+		image:    image,
+		opts:     opts,
+		bar:      bar,
+		state:    stateWriting,
+		start:    now,
+		lastTime: now,
 		logs: []string{
-			fmt.Sprintf("[%s] Starting write...", time.Now().Format("15:04:05.000")),
+			fmt.Sprintf("[%s] Starting write...", now.Format("15:04:05.000")),
 		},
 	}
 }
@@ -107,7 +113,7 @@ func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
 		go func() {
 			start := time.Now()
-			err := writer.Flash(m.device.DevNode, m.image, m.opts, func(p writer.Progress) {
+			err := writer.Flash(m.device.DevNode, m.image, m.opts, func(p pg.Update) {
 				m.program.Send(ProgressMsg(p))
 			})
 			if err != nil {
@@ -128,7 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bar.Width = msg.Width / 2
 
 	case ProgressMsg:
-		p := writer.Progress(msg)
+		p := pg.Update(msg)
 
 		if p.LogMessage != "" {
 			m.logs = append(m.logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000"), p.LogMessage))
@@ -139,6 +145,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.progress.Phase != m.lastPhase {
 				m.lastPhase = m.progress.Phase
 			}
+
+			// Compute smoothed speed
+			now := time.Now()
+			elapsed := now.Sub(m.lastTime).Seconds()
+			if elapsed > 0.5 {
+				chunkSpeed := float64(p.BytesWritten-m.lastBytes) / elapsed
+				if m.speed == 0 {
+					m.speed = chunkSpeed
+				} else {
+					m.speed = 0.3*chunkSpeed + 0.7*m.speed
+				}
+				m.lastTime = now
+				m.lastBytes = p.BytesWritten
+			}
+
 			percent := float64(m.progress.BytesWritten) / float64(m.progress.TotalBytes)
 			return m, m.bar.SetPercent(percent)
 		}
@@ -178,7 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	phaseLabel := "Writing Image"
-	if m.progress.Phase == writer.PhaseVerifying {
+	if m.progress.Phase == pg.PhaseVerifying {
 		phaseLabel = "Verifying Write"
 	}
 	title := titleStyle.Render(" " + phaseLabel + " ")
@@ -193,11 +214,10 @@ func (m Model) View() string {
 	switch m.state {
 	case stateWriting:
 		elapsed := time.Since(m.start)
-		speed := m.progress.Speed
 
 		eta := ""
-		if speed > 0 {
-			remaining := float64(m.progress.TotalBytes-m.progress.BytesWritten) / speed
+		if m.speed > 0 {
+			remaining := float64(m.progress.TotalBytes-m.progress.BytesWritten) / m.speed
 			eta = fmt.Sprintf("ETA: %s", time.Duration(remaining*float64(time.Second)).Truncate(time.Second))
 		}
 
@@ -209,7 +229,7 @@ func (m Model) View() string {
 				"%s / %s    %s/s    %s    Elapsed: %s",
 				humanBytes(m.progress.BytesWritten),
 				humanBytes(m.progress.TotalBytes),
-				humanBytes(uint64(speed)),
+				humanBytes(uint64(m.speed)),
 				eta,
 				elapsed.Truncate(time.Second),
 			)),

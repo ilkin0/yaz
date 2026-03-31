@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/ilkin0/yaz/internal/bootable"
 	"github.com/ilkin0/yaz/internal/config"
+	"github.com/ilkin0/yaz/internal/progress"
 )
 
 const (
 	writeBufferSize = 4 * 1024 * 1024
 )
 
-func Flash(device, image string, opts config.Options, onProgress ProgressFunc) error {
+func Flash(device, image string, opts config.Options, onProgress progress.Func) error {
 	f, err := os.Open(image)
 	if err != nil {
 		return errors.New("cannot open file: " + image)
@@ -26,19 +26,11 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	if err != nil {
 		return fmt.Errorf("reading image metadata: %w", err)
 	}
-	onProgress(Progress{LogMessage: fmt.Sprintf("ISO is hybrid: %t", iMeta.IsHybrid())})
+	onProgress(progress.Update{LogMessage: fmt.Sprintf("ISO is hybrid: %t", iMeta.IsHybrid())})
 
 	if !iMeta.IsHybrid() {
-		onProgress(Progress{LogMessage: fmt.Sprintf("Partitioning device: [%s] label: [%s]", device, iMeta.Label)})
-		return bootable.MakeUEFIBootDevice(device, iMeta.Label, image, func(msg string, bytesCopied, totalBytes uint64) {
-			p := Progress{LogMessage: msg}
-			if totalBytes > 0 {
-				p.Phase = PhaseWriting
-				p.BytesWritten = bytesCopied
-				p.TotalBytes = totalBytes
-			}
-			onProgress(p)
-		})
+		onProgress(progress.Update{LogMessage: fmt.Sprintf("Partitioning device: [%s] label: [%s]", device, iMeta.Label)})
+		return bootable.MakeUEFIBootDevice(device, iMeta.Label, image, onProgress)
 	}
 
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -52,14 +44,10 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	fsize := fi.Size()
 
 	// Unmount device and its partitions before writing
-	if onProgress != nil {
-		onProgress(Progress{LogMessage: "Unmounting device..."})
-	}
+	onProgress(progress.Update{LogMessage: "Unmounting device..."})
 	unmountDevice(device)
 
-	if onProgress != nil {
-		onProgress(Progress{LogMessage: "Opening device for writing..."})
-	}
+	onProgress(progress.Update{LogMessage: "Opening device for writing..."})
 	dFlags := os.O_WRONLY
 	if opts.SyncMode {
 		dFlags |= os.O_SYNC
@@ -75,10 +63,6 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 
 	buff := make([]byte, writeBufferSize)
 	var written uint64
-	lastTime := time.Now()
-	var lastWritten uint64
-	var smoothSpeed float64
-	const smoothing = 0.3
 
 	for {
 		n, err := f.Read(buff)
@@ -91,27 +75,11 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 			}
 			written += uint64(n)
 
-			now := time.Now()
-			elapsed := now.Sub(lastTime).Seconds()
-			if elapsed > 0.5 {
-				chunkSpeed := float64(written-lastWritten) / elapsed
-				if smoothSpeed == 0 {
-					smoothSpeed = chunkSpeed
-				} else {
-					smoothSpeed = smoothing*chunkSpeed + (1-smoothing)*smoothSpeed
-				}
-				lastTime = now
-				lastWritten = written
-			}
-
-			if onProgress != nil {
-				onProgress(Progress{
-					Phase:        PhaseWriting,
-					BytesWritten: written,
-					TotalBytes:   uint64(fsize),
-					Speed:        smoothSpeed,
-				})
-			}
+			onProgress(progress.Update{
+				Phase:        progress.PhaseWriting,
+				BytesWritten: written,
+				TotalBytes:   uint64(fsize),
+			})
 		}
 		if err == io.EOF {
 			break
@@ -123,9 +91,7 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	}
 
 	// flush all cached writes to the device
-	if onProgress != nil {
-		onProgress(Progress{LogMessage: "Syncing device..."})
-	}
+	onProgress(progress.Update{LogMessage: "Syncing device..."})
 	if err := syncAndClose(d, device); err != nil {
 		return err
 	}
@@ -134,9 +100,7 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 	rereadPartition(device)
 
 	if opts.VerifyWrite {
-		if onProgress != nil {
-			onProgress(Progress{LogMessage: "Starting verification..."})
-		}
+		onProgress(progress.Update{LogMessage: "Starting verification..."})
 		verified, err := Verify(device, image, onProgress)
 		if err != nil {
 			return fmt.Errorf("verification failed: %w", err)
@@ -145,9 +109,7 @@ func Flash(device, image string, opts config.Options, onProgress ProgressFunc) e
 		if !verified {
 			return errors.New("file integrity failed")
 		}
-		if onProgress != nil {
-			onProgress(Progress{LogMessage: "Verification passed"})
-		}
+		onProgress(progress.Update{LogMessage: "Verification passed"})
 	}
 	return nil
 }

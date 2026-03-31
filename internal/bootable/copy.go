@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/ilkin0/yaz/internal/progress"
 )
 
 const tempISOPath = "/tmp/yaz-iso"
@@ -12,7 +14,7 @@ const tempISOPath = "/tmp/yaz-iso"
 // copyISOContents mounts FAT32 partition and ISO image,
 // copies files from ISO to the FAT32 partition (not raw write),
 // and verifies UEFI boot loader exists.
-func copyISOContents(imagePath, partitionPath string, onProgress ProgressFunc) error {
+func copyISOContents(imagePath, partitionPath string, onProgress progress.Func) error {
 	os.MkdirAll(tempISOPath, 0o755)
 
 	deviceMountPath, err := mountPartition(partitionPath)
@@ -35,16 +37,20 @@ func copyISOContents(imagePath, partitionPath string, onProgress ProgressFunc) e
 		return nil
 	})
 
-	onProgress("Copying files to USB...", 0, totalBytes)
+	onProgress(progress.Update{LogMessage: "Copying files to USB..."})
 	var copiedBytes uint64
 	if err := copyDir(tempISOPath, deviceMountPath, func(n uint64) {
 		copiedBytes += n
-		onProgress("", copiedBytes, totalBytes)
+		onProgress(progress.Update{
+			Phase:        progress.PhaseWriting,
+			BytesWritten: copiedBytes,
+			TotalBytes:   totalBytes,
+		})
 	}); err != nil {
 		return fmt.Errorf("copying files: %w", err)
 	}
 
-	onProgress("Verifying UEFI boot loader...", 0, 0)
+	onProgress(progress.Update{LogMessage: "Verifying UEFI boot loader..."})
 	uefiLoader := filepath.Join(deviceMountPath, "EFI", "BOOT", "BOOTX64.EFI")
 	if _, err := os.Stat(uefiLoader); os.IsNotExist(err) {
 		return fmt.Errorf("UEFI fallback boot loader not found at %s", uefiLoader)

@@ -1,25 +1,24 @@
 package bootable
 
-import "fmt"
+import (
+	"fmt"
 
-// ProgressFunc reports copy progress to the TUI.
-// If msg is non-empty, it's a log message.
-// If totalBytes > 0, it's a byte-level progress update.
-type ProgressFunc func(msg string, bytesCopied, totalBytes uint64)
+	"github.com/ilkin0/yaz/internal/progress"
+)
 
-func MakeUEFIBootDevice(deviceNode, label, imagePath string, onProgress ProgressFunc) error {
-	onProgress("Creating GPT partition table...", 0, 0)
+func MakeUEFIBootDevice(deviceNode, label, imagePath string, onProgress progress.Func) error {
+	onProgress(progress.Update{LogMessage: "Creating GPT partition table..."})
 	p, err := createGptPartition(deviceNode, label)
 	if err != nil {
 		return err
 	}
-	onProgress(fmt.Sprintf("Partition created: %s", p), 0, 0)
+	onProgress(progress.Update{LogMessage: fmt.Sprintf("Partition created: %s", p)})
 
-	onProgress("Mounting partition and ISO...", 0, 0)
+	onProgress(progress.Update{LogMessage: "Mounting partition and ISO..."})
 	if err := copyISOContents(imagePath, p, onProgress); err != nil {
 		return fmt.Errorf("error during ISO copying: %w", err)
 	}
 
-	onProgress("UEFI boot device ready", 0, 0)
+	onProgress(progress.Update{LogMessage: "UEFI boot device ready"})
 	return nil
 }
