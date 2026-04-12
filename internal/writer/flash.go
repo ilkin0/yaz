@@ -57,6 +57,8 @@ func Flash(device, image string, opts config.Options, onProgress progress.Func) 
 		return fmt.Errorf("cannot open device %s: %w", device, err)
 	}
 
+	onProgress(progress.Update{LogMessage: fmt.Sprintf("Writing %s to %s...", progress.HumanBytes(uint64(fsize)), device)})
+
 	if !opts.QuickFormat {
 		// TODO zero-fill device first
 	}
@@ -90,13 +92,12 @@ func Flash(device, image string, opts config.Options, onProgress progress.Func) 
 		}
 	}
 
-	// flush all cached writes to the device
 	onProgress(progress.Update{LogMessage: "Syncing device..."})
 	if err := syncAndClose(d, device); err != nil {
 		return err
 	}
+	onProgress(progress.Update{LogMessage: "Sync complete"})
 
-	// re-read the partition table
 	rereadPartition(device)
 
 	if opts.VerifyWrite {

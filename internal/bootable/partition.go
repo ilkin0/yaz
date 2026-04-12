@@ -22,11 +22,10 @@ func createSinglePartition(device, label string) (string, error) {
 			return "", fmt.Errorf("partitioning %s: %w", device, err)
 		}
 
-		cmd = exec.Command("diskutil", "mountDisk", device)
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("mounting %s: %w", device, err)
-		}
-		return "", nil
+		// diskutil partitionDisk auto-mounts, but ensure it's mounted
+		partition := device + "s1"
+		exec.Command("diskutil", "mountDisk", device).Run()
+		return partition, nil
 	case "linux":
 		if err := exec.Command("parted", device, "--script", "mklabel", "gpt").Run(); err != nil {
 			return "", fmt.Errorf("creating GPT label on %s: %w", device, err)
