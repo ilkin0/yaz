@@ -9,6 +9,7 @@ const tempDevicePath = "/tmp/yaz-usb"
 
 func mountPartition(partition string) (string, error) {
 	os.MkdirAll(tempDevicePath, 0o755)
+	exec.Command("umount", "-l", tempDevicePath).Run()
 	if err := exec.Command("mount", partition, tempDevicePath).Run(); err != nil {
 		return "", err
 	}
@@ -16,6 +17,8 @@ func mountPartition(partition string) (string, error) {
 }
 
 func mountISO(imagePath string) error {
+	os.MkdirAll(tempISOPath, 0o755)
+	exec.Command("umount", "-l", tempISOPath).Run()
 	return exec.Command("mount", "-o", "loop,ro", imagePath, tempISOPath).Run()
 }
 

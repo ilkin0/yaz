@@ -40,3 +40,4 @@ func unmountPartition(partition string) {
 func unmountISO() {
 	exec.Command("hdiutil", "detach", tempISOPath).Run()
 }
+

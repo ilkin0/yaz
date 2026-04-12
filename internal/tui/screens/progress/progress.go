@@ -59,6 +59,8 @@ type WriteErrorMsg struct {
 
 type HomeMsg struct{}
 
+type tickMsg time.Time
+
 type state int
 
 const (
@@ -109,21 +111,30 @@ func New(p *tea.Program, dev device.Block, image string, opts config.Options) Mo
 	}
 }
 
+func tickEvery() tea.Cmd {
+	return tea.Every(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
 func (m Model) Init() tea.Cmd {
-	return func() tea.Msg {
-		go func() {
-			start := time.Now()
-			err := writer.Flash(m.device.DevNode, m.image, m.opts, func(p pg.Update) {
-				m.program.Send(ProgressMsg(p))
-			})
-			if err != nil {
-				m.program.Send(WriteErrorMsg{Err: err})
-			} else {
-				m.program.Send(WriteDoneMsg{Duration: time.Since(start)})
-			}
-		}()
-		return nil
-	}
+	return tea.Batch(
+		tickEvery(),
+		func() tea.Msg {
+			go func() {
+				start := time.Now()
+				err := writer.Flash(m.device.DevNode, m.image, m.opts, func(p pg.Update) {
+					m.program.Send(ProgressMsg(p))
+				})
+				if err != nil {
+					m.program.Send(WriteErrorMsg{Err: err})
+				} else {
+					m.program.Send(WriteDoneMsg{Duration: time.Since(start)})
+				}
+			}()
+			return nil
+		},
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -181,6 +192,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bar = barModel.(progress.Model)
 		return m, cmd
 
+	case tickMsg:
+		if m.state == stateWriting {
+			return m, tickEvery()
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q":
@@ -216,7 +233,8 @@ func (m Model) View() string {
 		elapsed := time.Since(m.start)
 
 		eta := ""
-		if m.speed > 0 {
+		stalled := time.Since(m.lastTime) > 3*time.Second
+		if m.speed > 0 && !stalled {
 			remaining := float64(m.progress.TotalBytes-m.progress.BytesWritten) / m.speed
 			eta = fmt.Sprintf("ETA: %s", time.Duration(remaining*float64(time.Second)).Truncate(time.Second))
 		}
@@ -227,9 +245,9 @@ func (m Model) View() string {
 			"",
 			labelStyle.Render(fmt.Sprintf(
 				"%s / %s    %s/s    %s    Elapsed: %s",
-				humanBytes(m.progress.BytesWritten),
-				humanBytes(m.progress.TotalBytes),
-				humanBytes(uint64(m.speed)),
+				pg.HumanBytes(m.progress.BytesWritten),
+				pg.HumanBytes(m.progress.TotalBytes),
+				pg.HumanBytes(uint64(m.speed)),
 				eta,
 				elapsed.Truncate(time.Second),
 			)),
@@ -244,9 +262,9 @@ func (m Model) View() string {
 			successStyle.Render("Write complete!"),
 			labelStyle.Render(fmt.Sprintf(
 				"%s written in %s (%s/s)",
-				humanBytes(m.progress.TotalBytes),
+				pg.HumanBytes(m.progress.TotalBytes),
 				m.duration.Truncate(time.Second),
-				humanBytes(uint64(avgSpeed)),
+				pg.HumanBytes(uint64(avgSpeed)),
 			)),
 		)
 
@@ -283,17 +301,4 @@ func (m Model) View() string {
 	full := lipgloss.JoinVertical(lipgloss.Center, content, help)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, full)
-}
-
-func humanBytes(b uint64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := uint64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
