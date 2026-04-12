@@ -4,6 +4,10 @@ A terminal UI tool for flashing OS images to USB drives. Built with Go and [Char
 
 Supports Linux and macOS.
 
+## Demo
+
+![yaz demo](https://i.imgur.com/lBiQ4fe.gif)
+
 ## Features
 
 - Flash ISO and raw disk images (.img) to USB drives
@@ -62,6 +66,7 @@ Root/sudo is required for device access.
 **The problem:** Win11 ISOs contain `sources/install.wim` (often >4GB). UEFI firmware only boots from FAT32, but FAT32 has a 4GB file size limit. So the biggest file in the ISO can't fit on the only bootable filesystem.
 
 **Attempt 1 — Dual partition (FAT32 + NTFS):** Created a small FAT32 partition for boot files and a large NTFS partition for data. Failed twice:
+
 1. First try: boot files on FAT32, everything else on NTFS → WIN RECOVERY error (BCD couldn't find `boot.wim`)
 2. Second try: everything on FAT32, only >4GB files on NTFS → "Select driver to install" error (Windows PE couldn't find `install.wim` across partitions)
 
@@ -74,10 +79,12 @@ Root/sudo is required for device access.
 **WIM splitting:** Single FAT32 partition. Copy all files normally, then split oversized `.wim` files into <4GB `.swm` chunks via `wimlib-imagex split`. Windows installer reads split SWMs natively. This is the same approach used by WoeUSB and windows2usb. Works with Secure Boot, no binary blobs, maximum compatibility.
 
 ### ISO types
+
 - **Hybrid** (Linux distros): has MBR/GPT, can be dd'd or file-copied
 - **Non-hybrid** (Win11): no partition table, must be file-copied with tool-created partitions
 - **Raw .img** (RaspiOS): full partition table, goes through dd path
 
 ### Platform notes
+
 - `wimlib-imagex`: `wimtools` (Debian/Ubuntu), `wimlib-utils` (Fedora), `wimlib` (macOS/Homebrew)
 - ntfs-3g FUSE is ~2 MB/s write speed — irrelevant now since we use FAT32 only

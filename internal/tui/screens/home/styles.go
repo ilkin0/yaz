@@ -4,7 +4,7 @@ import "github.com/charmbracelet/lipgloss"
 
 var (
 	appName    = "yaz"
-	appVersion = "0.1.0"
+	appVersion = "0.1.2"
 
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
