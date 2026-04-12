@@ -22,6 +22,31 @@ Supports Linux and macOS.
   - Fedora: `sudo dnf install wimlib-utils`
   - macOS: `brew install wimlib`
 
+## Installation
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew install ilkin0/tap/yaz
+```
+
+### Go
+
+```bash
+go install github.com/ilkin0/yaz/cmd/yaz@latest
+```
+
+### From source
+
+Requires [Go](https://go.dev/dl/) 1.25+ and `make`.
+
+```bash
+git clone https://github.com/ilkin0/yaz.git
+cd yaz
+make build
+sudo ./bin/yaz
+```
+
 ## Usage
 
 ```
